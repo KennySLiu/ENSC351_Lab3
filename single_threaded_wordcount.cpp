@@ -59,7 +59,7 @@ int main(){
         int count = i->second;
         outfile << word << ": " << count;
     }
-    long double finish_time = get_timeI();
+    long double finish_time = get_time();
 
     cout << finish_time - start_time << endl;
         

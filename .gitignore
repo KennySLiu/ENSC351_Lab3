@@ -1,0 +1,4 @@
+*.o
+WORDCOUNT_*
+S_WORDCOUNT_*
+*.gch
