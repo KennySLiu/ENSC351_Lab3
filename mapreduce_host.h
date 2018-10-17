@@ -104,14 +104,16 @@ void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, val
 
         // And create a thread to run the function.
         pthread_create(&threads[i], NULL, threaded_map_func<keytype, valuetype>, static_cast<void*>(input));
+        delete input;
     }
 
     for (int i = 0; i < NUM_CORES; ++i){
         // Join the threads, and then get their values
         pthread_join(threads[i], NULL);
-        vector<pair<keytype, valuetype> > mapped_kv_subVect = threaded_mapfunc_retvals[i];
-        for (int j = 0; j < mapped_kv_subVect.size(); ++j){
-            pair<keytype, valuetype> cur = mapped_kv_subVect[i];
+        //vector<pair<keytype, valuetype> > mapped_kv_subVect = threaded_mapfunc_retvals[i];
+        for (int j = 0; j < threaded_mapfunc_retvals[i].size(); ++j){
+            pair<keytype, valuetype> cur;
+            cur = threaded_mapfunc_retvals[i][j];
             mapped_kv_pairs.push_back(cur);
         }
     }
@@ -179,6 +181,7 @@ void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, val
         input->delimiter_indices = delimiter_indices[i];
 
         pthread_create(&threads[i], NULL, threaded_reduce_func<keytype, valuetype>, static_cast<void*>(input));
+        delete input;
     }
 
     vector<pair<keytype, valuetype> > reduced_kv_pairs;
