@@ -65,8 +65,8 @@ vector<person> input_reader(void* file){
 }
 
 
-pair< pair<person, person>, unordered_map<string> > map_func(pair<person, person> input){
-    unordered_map<string> friends_of_p1 = input.first.friends;
+pair< pair<person, person>, unordered_map<vector<string>> > map_func(pair<person, person> input){
+    unordered_map<vector<string> > friends_of_p1 = input.first.friends;
 
     return make_pair(input, friends_of_p1);
 }
