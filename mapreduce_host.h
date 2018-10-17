@@ -12,6 +12,7 @@
 #include <utility>
 #include <algorithm>
 #include <vector>
+#define NUM_CORES 4 //4 for the laptop
 
 
 struct kv_pair{
@@ -27,6 +28,16 @@ bool mapvect_sort_func(std::pair<keytype, valuetype> a, std::pair<keytype, value
 }
 
 template<class keytype, class valuetype>
+std::vector<std::pair<keytype, valuetype> > threaded_map_func(std::vector<keytype> parsed_input, int thread_num);
+    using namespace std;
+
+    for (int i = thread_num; i < parsed_input.size(); i += NUM_THREADS){
+        
+        
+
+
+
+template<class keytype, class valuetype>
 void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, valuetype> map_func (keytype), std::pair<keytype, valuetype> reduce_func (std::vector<std::pair<keytype, valuetype> >), void* output_func (std::vector<std::pair<keytype, valuetype> >), void* file){
     using namespace std;
     
@@ -37,7 +48,9 @@ void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, val
 
     /* MAPPER: */
     vector<pair<keytype, valuetype> > mapped_kv_pairs;
-    for (int i = 0; i < parsed_input.size(); ++i){
+    pthread_t threads[NUM_CORES];
+
+    for (int i = 0; i < NUM_CORES; ++i){
         mapped_kv_pairs.push_back(map_func(parsed_input[i]));
     }   
     /* END OF MAPPER SECTION */
