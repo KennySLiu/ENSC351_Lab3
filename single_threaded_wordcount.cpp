@@ -57,7 +57,7 @@ int main(){
     for (unordered_map<string, int>::iterator i = string_count_pairs.begin(); i != string_count_pairs.end(); ++i){
         string word = i->first;
         int count = i->second;
-        outfile << word << ": " << count;
+        outfile << word << ": " << count << endl;
     }
     long double finish_time = get_time();
 
