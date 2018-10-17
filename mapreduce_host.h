@@ -65,11 +65,15 @@ void* threaded_reduce_func(void* vp_input){
     vector<pair<keytype, valuetype> >* mapped_kv_pairs_subVect = input->mapped_kv_pairs_subVect;
     vector<int>* delimiter_indices = input->delimiter_indices;
 
+    if (delimiter_indices->size() == 0){
+        return NULL;
+    }
+
     for (int i = 0; i < delimiter_indices->size()-1; ++i){
 
         // Build the sub-vector that we will pass into the reducer:
         vector<pair<keytype, valuetype> > cur_subVect;
-        for (int j = (*delimiter_indices)[i]; j < (*delimiter_indices)[i+1] - 1; ++j){
+        for (int j = (*delimiter_indices)[i]; j < (*delimiter_indices)[i+1]; ++j){
             cur_subVect.push_back((*mapped_kv_pairs_subVect)[j]);
         }
         

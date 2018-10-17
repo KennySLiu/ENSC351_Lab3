@@ -2,3 +2,5 @@
 WORDCOUNT_*
 S_WORDCOUNT_*
 *.gch
+*.txt
+*.swp
