@@ -24,6 +24,15 @@ struct threaded_map_func_input{
 };
 
 template<class keytype, class valuetype>
+struct threaded_reduce_func_input{
+    int thread_num;
+    std::pair<keytype, valuetype> (*reduce_func) (std::vector<std::pair<keytype, valuetype> >);
+    std::vector<std::pair<keytype, valuetype> >* ret_p;
+    std::vector<std::pair<keytype, valuetype> >* mapped_kv_pairs_subVect;
+    std::vector<int> delimiter_indices;
+};
+
+template<class keytype, class valuetype>
 bool mapvect_sort_func(std::pair<keytype, valuetype> a, std::pair<keytype, valuetype> b){
     return (a.first < b.first);
 }
@@ -45,6 +54,29 @@ void* threaded_map_func(void* vp_input){
     }
 }   
 
+template<class keytype, class valuetype>
+void* threaded_reduce_func(void* vp_input){
+    using namespace std;
+    struct threaded_reduce_func_input<keytype, valuetype>* input = static_cast<struct threaded_reduce_func_input<keytype, valuetype>* >(vp_input);
+    
+    int thread_num = input->thread_num;
+    pair<keytype, valuetype> (*reduce_func) (vector<pair<keytype, valuetype> >) = input->reduce_func;
+    vector<pair<keytype, valuetype> >* ret_p = input->ret_p;
+    vector<pair<keytype, valuetype> >* mapped_kv_pairs_subVect = input->mapped_kv_pairs_subVect;
+    vector<int> delimiter_indices = input->delimiter_indices;
+
+    for (int i = 0; i < delimiter_indices.size()-1; ++i){
+
+        // Build the sub-vector that we will pass into the reducer:
+        vector<pair<keytype, valuetype> > cur_subVect;
+        for (int j = delimiter_indices[i]; j < delimiter_indices[i+1] - 1; ++j){
+            cur_subVect.push_back((*mapped_kv_pairs_subVect)[j]);
+        }
+        
+        pair<keytype, valuetype> cur_pair = reduce_func(cur_subVect);
+        ret_p->push_back(cur_pair);
+    }
+}
 
 
 template<class keytype, class valuetype>
@@ -75,11 +107,11 @@ void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, val
     }
 
     for (int i = 0; i < NUM_CORES; ++i){
-        // Join the threads, so we can get their values
+        // Join the threads, and then get their values
         pthread_join(threads[i], NULL);
-        vector<pair<keytype, valuetype> > mapped_kv_subVect_p = threaded_mapfunc_retvals[i];
-        for (int j = 0; j < mapped_kv_subVect_p.size(); ++j){
-            pair<keytype, valuetype> cur = mapped_kv_subVect_p[i];
+        vector<pair<keytype, valuetype> > mapped_kv_subVect = threaded_mapfunc_retvals[i];
+        for (int j = 0; j < mapped_kv_subVect.size(); ++j){
+            pair<keytype, valuetype> cur = mapped_kv_subVect[i];
             mapped_kv_pairs.push_back(cur);
         }
     }
@@ -93,22 +125,76 @@ void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, val
     
 
     /* REDUCER: */
-    vector<pair<keytype, valuetype> > reduced_kv_pairs;
+
+    // For each thread, we will pass in their mapped_kv_pairs_subVect AND their delimiter indices, so they 
+    // don't have to recompute the chunks of the vectors that are the same.
+    // We also pass in a threaded_reduce_func_retvals vector for them to write their results to.
+    vector<pair<keytype, valuetype> > threaded_reduce_func_retvals[NUM_CORES];
+    vector<pair<keytype, valuetype> > mapped_kv_pairs_subVect[NUM_CORES];
+    vector<int> delimiter_indices[NUM_CORES];
 
     for (int i = 0; i < mapped_kv_pairs.size(); ++i){
-        vector<pair<keytype, valuetype> > mapped_kv_pairs_subVect;
+        // We want to push the mapped kv pairs evenly to each thread. To do so, we check the workloads so-far-created for each thread.
+        // Then we pick the one with the shortest workload.
+        vector<pair<keytype, valuetype> >* target;
+        int minsize = 999999;
+        int minsize_index = 0;
+        int j = 0;
+
+        for (int j = 0; j < NUM_CORES; ++j){
+            int curVectSize = mapped_kv_pairs_subVect[i].size();
+
+            if (minsize == 999999){
+                minsize = mapped_kv_pairs_subVect[i].size();
+                minsize_index = i;
+            } else if (curVectSize < minsize){
+                minsize = curVectSize;
+                minsize_index = i;
+            } // else continue
+        } 
+        target = &mapped_kv_pairs_subVect[minsize_index];
+        // Finished finding the thread with the least workload.
     
         // Run until the j'th key is not equal to the i'th key:
-        for (int j = i; j < mapped_kv_pairs.size() && static_cast<keytype>(mapped_kv_pairs[j].first) == static_cast<keytype>(mapped_kv_pairs[i].first); ++j){
+        for (j = i; j < mapped_kv_pairs.size() && static_cast<keytype>(mapped_kv_pairs[j].first) == static_cast<keytype>(mapped_kv_pairs[i].first); ++j){
             // Copy the elements that match one another
             pair<keytype, valuetype> cur = mapped_kv_pairs[j];
-            mapped_kv_pairs_subVect.push_back(cur);
-            i = j;
+            target->push_back(cur);
         }
-
-        // Pass in the subVector to reduced_kv_pairs.
-        reduced_kv_pairs.push_back(reduce_func(mapped_kv_pairs_subVect));
+        i = j;
+        // Delimit based on the changes in size. The first time we push back 0 and size(), and every other time we push back size().
+        // This allows the threaded functions to get the subvector from delim_ind[0] and delim_ind[1]-1, and then from delim_ind[1] to delim_ind[2]-1, and so on.
+        if (delimiter_indices[minsize_index].size() == 0){
+            delimiter_indices[minsize_index].push_back(0);
+        }
+        delimiter_indices[minsize_index].push_back( delimiter_indices[minsize_index].size() );
     }
+
+    for (int i = 0; i < NUM_CORES; ++i){
+        threaded_reduce_func_input<keytype, valuetype>* input = new threaded_reduce_func_input<keytype, valuetype>;
+        input->thread_num = i;
+        input->reduce_func = reduce_func;
+        input->ret_p = &threaded_reduce_func_retvals[i];
+        input->mapped_kv_pairs_subVect = &mapped_kv_pairs_subVect[i];
+        input->delimiter_indices = delimiter_indices[i];
+
+        pthread_create(&threads[i], NULL, threaded_reduce_func<keytype, valuetype>, static_cast<void*>(input));
+    }
+
+    vector<pair<keytype, valuetype> > reduced_kv_pairs;
+
+    for (int i = 0; i < NUM_CORES; ++i){
+        pthread_join(threads[i], NULL);
+
+        for (int j = 0; j < threaded_reduce_func_retvals[i].size(); ++j){
+            pair<keytype, valuetype> cur_pair = (threaded_reduce_func_retvals[i])[j];
+            reduced_kv_pairs.push_back(cur_pair);
+        } 
+    }
+
+        
+    
+
     /* END OF REDUCER SECTION */
 
 
