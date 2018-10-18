@@ -92,6 +92,14 @@ void mapreduce(std::vector<keytype> input_reader (void*), std::pair<keytype, val
     /* END OF INPUT READER SECTION */
 
 
+    /* debug (for mutual_friends.cpp): */
+    for (int i = 0; i < parsed_input.size(); ++i){
+        cout << parsed_input[i].first.name << ", " << parsed_input[i].second.name;
+    } 
+
+
+
+
     /* MAPPER: */
     vector<pair<keytype, valuetype> > mapped_kv_pairs;
     void* ret;
